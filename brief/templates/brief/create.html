@@ -36,16 +36,102 @@
                 <!-- Form (initially visible) -->
                 <form method="post" id="briefForm">
                     {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="topic" class="form-label">Topic</label>
-                        <input type="text" 
-                               name="topic" 
-                               id="topic" 
-                               class="form-control form-control-lg" 
-                               placeholder="e.g., Alzheimer's Disease" 
-                               required>
-                        <div class="form-text">Enter a medical condition or therapeutic area to analyze clinical trials</div>
+                    
+                    <!-- Search Mode Toggle -->
+                    <div class="mb-4">
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="search_mode" id="simple_mode" value="simple" checked>
+                            <label class="btn btn-outline-danger" for="simple_mode">
+                                <i class="bi bi-search me-2"></i>Simple Search
+                            </label>
+                            
+                            <input type="radio" class="btn-check" name="search_mode" id="advanced_mode" value="advanced">
+                            <label class="btn btn-outline-danger" for="advanced_mode">
+                                <i class="bi bi-sliders me-2"></i>Advanced Search
+                            </label>
+                        </div>
+                        <div class="form-text mt-2">
+                            <span id="simple_help">Quick search using any medical term</span>
+                            <span id="advanced_help" style="display: none;">Structured search for information specialists</span>
+                        </div>
                     </div>
+
+                    <!-- Simple Search Panel -->
+                    <div id="simple_panel">
+                        <div class="mb-3">
+                            <label for="topic" class="form-label">Medical Topic</label>
+                            <input type="text" 
+                                   name="topic" 
+                                   id="topic" 
+                                   class="form-control form-control-lg" 
+                                   placeholder="e.g., Alzheimer's Disease, Breast Cancer, Type 2 Diabetes" 
+                                   required>
+                            <div class="form-text">Enter any medical condition, disease, or therapeutic area</div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Search Panel -->
+                    <div id="advanced_panel" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="condition" class="form-label">Condition <span class="text-muted">(optional)</span></label>
+                                    <input type="text" 
+                                           name="condition" 
+                                           id="condition" 
+                                           class="form-control" 
+                                           placeholder="e.g., Alzheimer's Disease">
+                                    <div class="form-text">Disease, disorder, or medical condition</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="intervention" class="form-label">Intervention <span class="text-muted">(optional)</span></label>
+                                    <input type="text" 
+                                           name="intervention" 
+                                           id="intervention" 
+                                           class="form-control" 
+                                           placeholder="e.g., Donepezil, Immunotherapy">
+                                    <div class="form-text">Drug, therapy, device, or treatment</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Search Logic</label>
+                            <div class="mt-2">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="search_operator" id="op_and" value="AND" checked>
+                                    <label class="form-check-label" for="op_and">
+                                        <strong>AND</strong> <span class="text-muted">- both condition AND intervention</span>
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="search_operator" id="op_or" value="OR">
+                                    <label class="form-check-label" for="op_or">
+                                        <strong>OR</strong> <span class="text-muted">- either condition OR intervention</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="include_observational" id="include_obs" checked>
+                                <label class="form-check-label" for="include_obs">
+                                    Include observational studies <span class="text-muted">(not just interventional trials)</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Search Preview -->
+                        <div class="alert alert-light border" id="search_preview">
+                            <small class="text-muted">
+                                <strong>Search Query:</strong> <span id="preview_text">Enter condition and/or intervention above</span>
+                            </small>
+                        </div>
+                    </div>
+
                     <div class="d-grid">
                         <button type="submit" class="btn btn-danger btn-lg" id="submitBtn">
                             <span class="btn-text">Create Brief</span>
@@ -67,20 +153,120 @@ document.addEventListener('DOMContentLoaded', function() {
     const submitBtn = document.getElementById('submitBtn');
     const topicInput = document.getElementById('topic');
     const loadingTopic = document.getElementById('loadingTopic');
+    
+    // Search mode elements
+    const simpleModeRadio = document.getElementById('simple_mode');
+    const advancedModeRadio = document.getElementById('advanced_mode');
+    const simplePanel = document.getElementById('simple_panel');
+    const advancedPanel = document.getElementById('advanced_panel');
+    const simpleHelp = document.getElementById('simple_help');
+    const advancedHelp = document.getElementById('advanced_help');
+    
+    // Advanced search elements
+    const conditionInput = document.getElementById('condition');
+    const interventionInput = document.getElementById('intervention');
+    const andOperator = document.getElementById('op_and');
+    const orOperator = document.getElementById('op_or');
+    const previewText = document.getElementById('preview_text');
 
-    form.addEventListener('submit', function(e) {
-        // Get the topic value
-        const topic = topicInput.value.trim();
+    // Handle search mode toggle
+    function toggleSearchMode() {
+        if (simpleModeRadio.checked) {
+            simplePanel.style.display = 'block';
+            advancedPanel.style.display = 'none';
+            simpleHelp.style.display = 'inline';
+            advancedHelp.style.display = 'none';
+            topicInput.required = true;
+        } else {
+            simplePanel.style.display = 'none';
+            advancedPanel.style.display = 'block';
+            simpleHelp.style.display = 'none';
+            advancedHelp.style.display = 'inline';
+            topicInput.required = false;
+        }
+        updateSearchPreview();
+    }
+
+    // Update search preview in advanced mode
+    function updateSearchPreview() {
+        if (!advancedModeRadio.checked) return;
         
-        if (topic) {
+        const condition = conditionInput.value.trim();
+        const intervention = interventionInput.value.trim();
+        const operator = andOperator.checked ? 'AND' : 'OR';
+        
+        let preview = '';
+        
+        if (condition && intervention) {
+            preview = `${condition} ${operator} ${intervention}`;
+        } else if (condition) {
+            preview = condition;
+        } else if (intervention) {
+            preview = intervention;
+        } else {
+            preview = 'Enter condition and/or intervention above';
+        }
+        
+        previewText.textContent = preview;
+    }
+
+    // Form validation
+    function validateForm() {
+        if (simpleModeRadio.checked) {
+            return topicInput.value.trim() !== '';
+        } else {
+            const condition = conditionInput.value.trim();
+            const intervention = interventionInput.value.trim();
+            return condition !== '' || intervention !== '';
+        }
+    }
+
+    // Event listeners
+    simpleModeRadio.addEventListener('change', toggleSearchMode);
+    advancedModeRadio.addEventListener('change', toggleSearchMode);
+    conditionInput.addEventListener('input', updateSearchPreview);
+    interventionInput.addEventListener('input', updateSearchPreview);
+    andOperator.addEventListener('change', updateSearchPreview);
+    orOperator.addEventListener('change', updateSearchPreview);
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        // Validate based on current mode
+        if (!validateForm()) {
+            e.preventDefault();
+            if (simpleModeRadio.checked) {
+                alert('Please enter a medical topic.');
+                topicInput.focus();
+            } else {
+                alert('Please enter at least a condition or intervention.');
+                conditionInput.focus();
+            }
+            return;
+        }
+
+        // Get the topic value for display
+        let displayTopic = '';
+        if (simpleModeRadio.checked) {
+            displayTopic = topicInput.value.trim();
+        } else {
+            const condition = conditionInput.value.trim();
+            const intervention = interventionInput.value.trim();
+            if (condition && intervention) {
+                displayTopic = `${condition} + ${intervention}`;
+            } else {
+                displayTopic = condition || intervention;
+            }
+        }
+        
+        if (displayTopic) {
             // Update loading topic display
-            loadingTopic.textContent = topic;
+            loadingTopic.textContent = displayTopic;
             
             // Hide form and show loading state
             form.style.display = 'none';
             loadingState.style.display = 'block';
             
-            // Update button to show loading (in case form is still visible)
+            // Update button to show loading
             const btnText = submitBtn.querySelector('.btn-text');
             const spinner = submitBtn.querySelector('.spinner-border');
             btnText.textContent = 'Creating...';
@@ -88,6 +274,9 @@ document.addEventListener('DOMContentLoaded', function() {
             submitBtn.disabled = true;
         }
     });
+
+    // Initialize
+    toggleSearchMode();
 });
 </script>
 {% endblock %}

@@ -369,13 +369,14 @@ def create_trial_from_study(study_data: Dict[str, Any], brief: Brief) -> Optiona
         return None
 
 
-def generate_brief(topic: str, owner=None) -> Brief:
+def generate_brief(search_term: str, owner=None, display_topic: str = None) -> Brief:
     """
     Generate a complete clinical trial brief with AI analysis.
     
     Args:
-        topic: Medical topic to analyze
+        search_term: The actual search term to use for ClinicalTrials.gov API
         owner: User who owns the brief
+        display_topic: The topic to display (defaults to search_term if not provided)
         
     Returns:
         Generated Brief object
@@ -383,19 +384,22 @@ def generate_brief(topic: str, owner=None) -> Brief:
     Raises:
         Exception: If brief generation fails
     """
-    logger.info(f"Starting brief generation for topic: {topic}")
+    # Use display_topic if provided, otherwise use search_term
+    topic_for_display = display_topic or search_term
+    
+    logger.info(f"Starting brief generation for display topic: {topic_for_display} (search: {search_term})")
     
     # Create brief with generating status
     brief = Brief.objects.create(
-        topic=topic,
+        topic=topic_for_display,
         owner=owner,
         status=Brief.STATUS_GENERATING
     )
     
     try:
-        # Step 1: Fetch clinical trials
+        # Step 1: Fetch clinical trials using the search term
         api_client = ClinicalTrialsAPI()
-        studies = api_client.search_studies(topic)
+        studies = api_client.search_studies(search_term)
         
         logger.info(f"Fetched {len(studies)} studies from ClinicalTrials.gov")
         
@@ -408,13 +412,13 @@ def generate_brief(topic: str, owner=None) -> Brief:
         
         logger.info(f"Created {trials_created} trial records")
         
-        # Step 3: Generate AI analysis
+        # Step 3: Generate AI analysis (use display topic for analysis context)
         trials = list(brief.trials.all())
         if trials:
             analyzer = AIAnalyzer()
-            brief.gpt_summary = analyzer.analyze_trials(topic, trials)
+            brief.gpt_summary = analyzer.analyze_trials(topic_for_display, trials)
         else:
-            brief.gpt_summary = f"No clinical trials found for '{topic}'. This may indicate a very specialized or emerging therapeutic area."
+            brief.gpt_summary = f"No clinical trials found for '{topic_for_display}'. This may indicate a very specialized or emerging therapeutic area."
         
         # Step 4: Mark as completed
         brief.status = Brief.STATUS_COMPLETED

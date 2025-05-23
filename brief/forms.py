@@ -13,46 +13,111 @@ from .models import Brief
 class BriefCreateForm(forms.ModelForm):
     """Form for creating a new clinical trial brief."""
     
+    # Simple mode field (default)
     topic = forms.CharField(
         max_length=200,
         min_length=2,
+        required=False,
         widget=forms.TextInput(attrs={
-            'class': 'form-control',
+            'class': 'form-control form-control-lg',
             'placeholder': 'e.g., Alzheimer\'s Disease, Oncology, Diabetes',
             'autocomplete': 'off'
         }),
         help_text='Enter a medical condition or therapeutic area to analyze clinical trials'
     )
     
+    # Advanced mode fields
+    search_mode = forms.ChoiceField(
+        choices=[
+            ('simple', 'Simple Search'),
+            ('advanced', 'Advanced Search')
+        ],
+        initial='simple',
+        required=False,
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'})
+    )
+    
+    condition = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., Alzheimer\'s Disease, Type 2 Diabetes, Breast Cancer',
+            'autocomplete': 'off'
+        }),
+        help_text='Medical condition, disease, or syndrome'
+    )
+    
+    intervention = forms.CharField(
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g., Donepezil, Immunotherapy, CAR-T Cell Therapy',
+            'autocomplete': 'off'
+        }),
+        help_text='Drug, therapy, device, or intervention being studied'
+    )
+    
+    search_operator = forms.ChoiceField(
+        choices=[
+            ('AND', 'AND (both condition AND intervention)'),
+            ('OR', 'OR (either condition OR intervention)'),
+        ],
+        initial='AND',
+        required=False,
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'})
+    )
+    
+    include_observational = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        help_text='Include observational studies (not just interventional trials)'
+    )
+    
     class Meta:
         model = Brief
         fields = ['topic']
     
-    def clean_topic(self):
-        """Validate and clean the topic field."""
-        topic = self.cleaned_data.get('topic', '').strip()
+    def clean(self):
+        """Validate the form based on search mode."""
+        cleaned_data = super().clean()
+        search_mode = cleaned_data.get('search_mode', 'simple')
+        topic = cleaned_data.get('topic', '').strip()
+        condition = cleaned_data.get('condition', '').strip()
+        intervention = cleaned_data.get('intervention', '').strip()
         
-        if not topic:
-            raise ValidationError('Topic is required.')
+        if search_mode == 'simple':
+            if not topic:
+                raise ValidationError('Topic is required for simple search.')
+            # Build the combined search string for backend
+            cleaned_data['effective_search'] = topic
+            
+        else:  # advanced mode
+            if not condition and not intervention:
+                raise ValidationError('At least one of Condition or Intervention is required for advanced search.')
+            
+            # Build the search string based on operator
+            search_parts = []
+            if condition:
+                search_parts.append(condition)
+            if intervention:
+                search_parts.append(intervention)
+            
+            operator = cleaned_data.get('search_operator', 'AND')
+            if len(search_parts) == 1:
+                cleaned_data['effective_search'] = search_parts[0]
+            else:
+                cleaned_data['effective_search'] = f' {operator} '.join(search_parts)
+            
+            # Set topic for the model (display purposes)
+            if condition and intervention:
+                cleaned_data['topic'] = f"{condition} + {intervention}"
+            else:
+                cleaned_data['topic'] = condition or intervention
         
-        if len(topic) < 2:
-            raise ValidationError('Topic must be at least 2 characters long.')
-        
-        # Check for common medical terms to ensure relevance
-        medical_keywords = [
-            'disease', 'syndrome', 'disorder', 'cancer', 'tumor', 'therapy',
-            'treatment', 'drug', 'medicine', 'clinical', 'trial', 'study',
-            'oncology', 'cardiology', 'neurology', 'diabetes', 'hypertension',
-            'alzheimer', 'parkinson', 'covid', 'vaccine', 'immunology',
-            'pharmaceutical', 'biotech', 'medical', 'health'
-        ]
-        
-        topic_lower = topic.lower()
-        if not any(keyword in topic_lower for keyword in medical_keywords):
-            # Allow anyway but add warning in help text
-            pass
-        
-        return topic
+        return cleaned_data
     
     def save(self, commit=True, owner=None):
         """Save the form with the owner."""

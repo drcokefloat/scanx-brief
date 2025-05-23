@@ -156,15 +156,20 @@ def create_brief(request: HttpRequest) -> HttpResponse:
         
         if form.is_valid():
             try:
+                # Get the effective search term (processed by form)
+                search_term = form.cleaned_data['effective_search']
                 topic = form.cleaned_data['topic']
-                logger.info(f"Creating brief for topic: {topic} by {request.user.username}")
+                search_mode = form.cleaned_data['search_mode']
+                
+                logger.info(f"Creating brief for topic: {topic} (search: {search_term}, mode: {search_mode}) by {request.user.username}")
                 
                 # Create brief asynchronously (in a real app, use Celery)
-                brief = generate_brief(topic, owner=request.user)
+                # Pass the effective search term to the generation function
+                brief = generate_brief(search_term, owner=request.user, display_topic=topic)
                 
                 logger.info(f"Brief created successfully: {brief.id}")
                 
-                # Redirect to dashboard without the loading message since we show it on create page
+                # Redirect to dashboard
                 return redirect('brief_dashboard', brief_id=brief.id)
                 
             except Exception as e:

@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load markdown_tags %}
+{% load badge_filters %}
+
+{% block title %}{{ brief.topic }} - Clinical Brief{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'brief_list' %}">My Briefs</a></li>
+                <li class="breadcrumb-item active">{{ brief.topic }}</li>
+            </ol>
+        </nav>
+        <button onclick="confirmDelete()" class="btn btn-outline-danger btn-sm">Delete Brief</button>
+    </div>
+
+    <div class="bg-danger text-white py-4 rounded mb-4">
+        <div class="container">
+            <h1 class="display-6 fw-bold">{{ brief.topic }}</h1>
+            <p class="lead mb-0">Clinical Trial Landscape Analysis</p>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" 
+                    data-bs-toggle="collapse" data-bs-target="#executiveSummary" 
+                    aria-expanded="false" aria-controls="executiveSummary">
+                <h2 class="h5 mb-0 d-flex justify-content-between align-items-center">
+                    Executive Summary (AI Generated)
+                    <span>▼</span>
+                </h2>
+            </button>
+        </div>
+        <div class="collapse" id="executiveSummary">
+            <div class="card-body">
+                {% if summary_sections %}
+                    {% for section in summary_sections %}
+                        <div class="mb-4">
+                            <h3 class="h6 text-danger fw-bold mb-2">{{ section.title }}</h3>
+                            <p class="mb-0 lh-lg">{{ section.content }}</p>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Fallback for plain text -->
+                    <div class="lh-lg">{{ brief.gpt_summary|linebreaksbr }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Key Metrics</h2>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3 col-sm-6">
+                    <div class="card bg-light text-center">
+                        <div class="card-body">
+                            <h3 class="h6 text-muted">Total Trials</h3>
+                            <p class="h2 text-danger mb-0">{{ trial_stats.total }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="card bg-light text-center">
+                        <div class="card-body">
+                            <h3 class="h6 text-muted">Active Trials</h3>
+                            <p class="h2 text-danger mb-0">{{ trial_stats.active }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="card bg-light text-center">
+                        <div class="card-body">
+                            <h3 class="h6 text-muted">Phase 3 Trials</h3>
+                            <p class="h2 text-danger mb-0">{{ trial_stats.phase3 }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="card bg-light text-center">
+                        <div class="card-body">
+                            <h3 class="h6 text-muted">Unique Sponsors</h3>
+                            <p class="h2 text-danger mb-0">{{ sponsors|length }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2 class="h5 mb-0">Clinical Trial Landscape</h2>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <input type="search" id="trialSearch" class="form-control" placeholder="Search trials...">
+                </div>
+                <div class="col-md-4">
+                    <select id="phaseFilter" class="form-select">
+                        <option value="">All Phases</option>
+                        {% for phase in phases %}
+                            <option value="{{ phase }}">{{ phase }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <select id="statusFilter" class="form-select">
+                        <option value="">All Statuses</option>
+                        {% for status in statuses %}
+                            <option value="{{ status }}">{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                <table class="table table-hover table-sm">
+                    <thead class="table-danger sticky-top">
+                        <tr>
+                            <th>NCT ID</th>
+                            <th>Title</th>
+                            <th>Sponsor</th>
+                            <th>Status</th>
+                            <th>Phase</th>
+                            <th>Start Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in trials %}
+                            <tr data-phase="{{ t.phase|default:'NA' }}" data-status="{{ t.status|default:'NA' }}">
+                                <td><a href="{{ t.url }}" target="_blank" rel="noopener" class="text-decoration-none">{{ t.nct_id }}</a></td>
+                                <td class="small">{{ t.title }}</td>
+                                <td class="small">{{ t.sponsor|default:"NA" }}</td>
+                                <td>
+                                    {% if t.status == 'RECRUITING' %}
+                                        <span class="badge bg-success">{{ t.status }}</span>
+                                    {% elif t.status == 'COMPLETED' %}
+                                        <span class="badge bg-secondary">{{ t.status }}</span>
+                                    {% elif t.status == 'ACTIVE_NOT_RECRUITING' %}
+                                        <span class="badge bg-info">{{ t.status }}</span>
+                                    {% elif t.status == 'TERMINATED' %}
+                                        <span class="badge bg-danger">{{ t.status }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ t.status|default:"NA" }}</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge bg-light text-dark">{{ t.phase|default:"NA" }}</span></td>
+                                <td class="small">{{ t.start_date|date:"M Y"|default:"NA" }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted py-4">No trials found.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden delete form -->
+    <form id="deleteForm" method="post" action="{% url 'delete_brief' brief.id %}" style="display: none;">
+        {% csrf_token %}
+    </form>
+{% endblock %}
+
+
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('trialSearch');
+        const phaseFilter = document.getElementById('phaseFilter');
+        const statusFilter = document.getElementById('statusFilter');
+
+        // Add event listeners
+        searchInput?.addEventListener('input', filterTable);
+        phaseFilter?.addEventListener('change', filterTable);
+        statusFilter?.addEventListener('change', filterTable);
+
+        function confirmDelete() {
+            if (confirm('Are you sure you want to delete this brief? This action cannot be undone.')) {
+                document.getElementById('deleteForm').submit();
+            }
+        }
+
+        function filterTable() {
+            const searchQuery = searchInput.value.toLowerCase();
+            const selectedPhase = phaseFilter.value;
+            const selectedStatus = statusFilter.value;
+            const rows = document.querySelectorAll('tbody tr[data-phase]');
+
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                const phase = row.dataset.phase;
+                const status = row.dataset.status;
+
+                const matchesSearch = text.includes(searchQuery);
+                const matchesPhase = !selectedPhase || phase === selectedPhase;
+                const matchesStatus = !selectedStatus || status === selectedStatus;
+
+                row.style.display = (matchesSearch && matchesPhase && matchesStatus) ? '' : 'none';
+            });
+        }
+
+        // Make confirmDelete available globally
+        window.confirmDelete = confirmDelete;
+    });
+</script>
+{% endblock %}

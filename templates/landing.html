@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to ScanX{% endblock %}
+
+{% block content %}
+    {% if not user.is_authenticated %}
+        <div class="bg-danger text-white py-5">
+            <div class="container text-center">
+                <h1 class="display-4 fw-bold mb-4">Clinical Trial Intelligence</h1>
+                <p class="lead mb-4">Get instant insights into clinical trial landscapes. Track trends, analyze sponsor activity, and identify opportunities in your therapeutic area.</p>
+                <a href="{% url 'signup' %}" class="btn btn-light btn-lg">Get Started Free</a>
+            </div>
+        </div>
+
+        <div class="py-5">
+            <div class="container">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="fs-1 mb-3">🔍</div>
+                                <h3 class="h5">Comprehensive Analysis</h3>
+                                <p class="text-muted">Access detailed insights from thousands of clinical trials across all phases and therapeutic areas.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="fs-1 mb-3">📊</div>
+                                <h3 class="h5">Real-time Updates</h3>
+                                <p class="text-muted">Stay current with the latest trial data, including status changes, new studies, and sponsor activity.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100 text-center border-0 shadow-sm">
+                            <div class="card-body">
+                                <div class="fs-1 mb-3">💡</div>
+                                <h3 class="h5">AI-Powered Insights</h3>
+                                <p class="text-muted">Get expert analysis of trial trends, strategic signals, and market opportunities.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="bg-light py-5">
+            <div class="container text-center">
+                <h1 class="display-5 mb-4">Welcome back, {{ user.username }}!</h1>
+                <p class="lead mb-4">Ready to explore more clinical trial landscapes?</p>
+                <a href="{% url 'create_brief' %}" class="btn btn-danger btn-lg">Create New Brief</a>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %} 

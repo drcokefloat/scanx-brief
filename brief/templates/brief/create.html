@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Create Brief{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'brief_list' %}">My Briefs</a></li>
+                <li class="breadcrumb-item active">Create Brief</li>
+            </ol>
+        </nav>
+        
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h2 class="h4 mb-0">Create a New Brief</h2>
+            </div>
+            <div class="card-body">
+                <!-- Loading state (initially hidden) -->
+                <div id="loadingState" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-danger mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h4 class="text-danger">Generating Your Brief...</h4>
+                    <p class="text-muted">
+                        Analyzing clinical trials and generating insights for <strong id="loadingTopic"></strong>.<br>
+                        This may take a few minutes.
+                    </p>
+                    <div class="progress mt-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger" 
+                             role="progressbar" style="width: 100%"></div>
+                    </div>
+                </div>
+
+                <!-- Form (initially visible) -->
+                <form method="post" id="briefForm">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="topic" class="form-label">Topic</label>
+                        <input type="text" 
+                               name="topic" 
+                               id="topic" 
+                               class="form-control form-control-lg" 
+                               placeholder="e.g., Alzheimer's Disease" 
+                               required>
+                        <div class="form-text">Enter a medical condition or therapeutic area to analyze clinical trials</div>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger btn-lg" id="submitBtn">
+                            <span class="btn-text">Create Brief</span>
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('briefForm');
+    const loadingState = document.getElementById('loadingState');
+    const submitBtn = document.getElementById('submitBtn');
+    const topicInput = document.getElementById('topic');
+    const loadingTopic = document.getElementById('loadingTopic');
+
+    form.addEventListener('submit', function(e) {
+        // Get the topic value
+        const topic = topicInput.value.trim();
+        
+        if (topic) {
+            // Update loading topic display
+            loadingTopic.textContent = topic;
+            
+            // Hide form and show loading state
+            form.style.display = 'none';
+            loadingState.style.display = 'block';
+            
+            // Update button to show loading (in case form is still visible)
+            const btnText = submitBtn.querySelector('.btn-text');
+            const spinner = submitBtn.querySelector('.spinner-border');
+            btnText.textContent = 'Creating...';
+            spinner.classList.remove('d-none');
+            submitBtn.disabled = true;
+        }
+    });
+});
+</script>
+{% endblock %}

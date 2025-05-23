@@ -461,10 +461,10 @@ class AIAnalyzer:
         return sorted_trials[:50]  # Limit to top 50 for analysis
     
     def _format_trials_for_analysis(self, trials: List[Trial]) -> str:
-        """Format trials for AI analysis with strategic intelligence focus."""
+        """Format trials for AI analysis."""
         lines = []
         
-        # Add strategic summary header
+        # Add pipeline summary header
         total_trials = len(trials)
         phases = [t.phase for t in trials if t.phase]
         phase_counts = {
@@ -474,37 +474,17 @@ class AIAnalyzer:
             'PHASE4': sum(1 for p in phases if p == 'PHASE4')
         }
         
-        # Geographic intelligence (basic sponsor country analysis)
-        sponsor_countries = self._analyze_sponsor_geography(trials)
-        
-        lines.append("=== STRATEGIC PIPELINE SUMMARY ===")
-        lines.append(f"Total Trials Analyzed: {total_trials}")
+        lines.append("=== PIPELINE OVERVIEW ===")
+        lines.append(f"Total Trials: {total_trials}")
         lines.append(f"Phase Distribution: Phase 1: {phase_counts['PHASE1']}, Phase 2: {phase_counts['PHASE2']}, Phase 3: {phase_counts['PHASE3']}, Phase 4: {phase_counts['PHASE4']}")
-        
-        if sponsor_countries:
-            top_countries = sorted(sponsor_countries.items(), key=lambda x: x[1], reverse=True)[:5]
-            country_summary = ", ".join([f"{country}: {count}" for country, count in top_countries])
-            lines.append(f"Geographic Distribution (top sponsors): {country_summary}")
-        
         lines.append("")
-        lines.append("=== DETAILED TRIAL DATA ===")
+        lines.append("=== TRIAL DETAILS ===")
         
         for trial in trials:
-            # Calculate estimated market timeline
-            timeline_estimate = "Unknown"
-            if trial.phase == 'PHASE1':
-                timeline_estimate = "4-7 years to market"
-            elif trial.phase == 'PHASE2':
-                timeline_estimate = "3-5 years to market"
-            elif trial.phase == 'PHASE3':
-                timeline_estimate = "1-3 years to market"
-            elif trial.phase == 'PHASE4':
-                timeline_estimate = "Already approved/post-market"
-            
             line = (
                 f"{trial.nct_id}: {trial.title} | "
                 f"Sponsor: {trial.sponsor_display} | "
-                f"Phase: {trial.phase_display} ({timeline_estimate}) | "
+                f"Phase: {trial.phase_display} | "
                 f"Status: {trial.status or 'N/A'} | "
                 f"Start: {trial.start_date or 'N/A'}"
             )
@@ -512,58 +492,23 @@ class AIAnalyzer:
         
         return "\n".join(lines)
     
-    def _analyze_sponsor_geography(self, trials: List[Trial]) -> Dict[str, int]:
-        """Basic geographic analysis based on sponsor names."""
-        # Simple country mapping based on common sponsor patterns
-        country_indicators = {
-            'US': ['Inc.', 'LLC', 'Corp.', 'Corporation', 'Pharmaceuticals', 'Pfizer', 'Merck', 'Bristol', 'Amgen', 'Gilead', 'Biogen', 'Moderna'],
-            'UK': ['Ltd', 'Limited', 'plc', 'GlaxoSmithKline', 'AstraZeneca'],
-            'Switzerland': ['AG', 'Novartis', 'Roche', 'Hoffmann'],
-            'France': ['Sanofi', 'Servier'],
-            'Germany': ['GmbH', 'Bayer', 'Boehringer'],
-            'Denmark': ['Novo Nordisk', 'Lundbeck'],
-            'Japan': ['Takeda', 'Daiichi', 'Eisai', 'Otsuka'],
-            'China': ['Sinovac', 'CanSino', 'Beijing', 'Shanghai']
-        }
-        
-        country_counts = {}
-        
-        for trial in trials:
-            sponsor = trial.sponsor or ""
-            
-            # Try to match sponsor to country
-            for country, indicators in country_indicators.items():
-                if any(indicator in sponsor for indicator in indicators):
-                    country_counts[country] = country_counts.get(country, 0) + 1
-                    break
-        
-        return country_counts
-    
     def _build_analysis_prompt(self, topic: str, trial_text: str) -> str:
         """Build the prompt for AI analysis."""
-        return f"""You are an expert in clinical development, market access, and strategic pipeline intelligence.
+        return f"""You are an expert in clinical development and market access.
 
-Based on these clinical trials for '{topic}', provide a comprehensive strategic analysis including:
+Based on these clinical trials for '{topic}', provide a comprehensive analysis including:
 
-1. **Strategic Pipeline Overview**: Current development landscape, key trends, and pipeline maturity
-2. **Geographic Distribution & Capabilities**: Where development is concentrated, national/regional strengths and gaps
-3. **Development Timeline Intelligence**: Phase distribution analysis with realistic market availability timelines (Phase 1: 4-7 years, Phase 2: 3-5 years, Phase 3: 1-3 years to market)
-4. **Technology Platforms & Mechanisms**: Group interventions by mechanism of action, platform technology, or therapeutic approach
-5. **Key Players & Strategic Positioning**: Major sponsors, their focus areas, and competitive positioning
-6. **Capability Gaps & Strategic Opportunities**: Underserved areas, emerging approaches, and strategic implications
-7. **Policy & Regulatory Considerations**: Regulatory pathways, approval timelines, and policy implications
-
-**For government and strategic intelligence purposes, emphasize:**
-- National capabilities and dependencies
-- Timeline implications for strategic planning
-- Technology platform diversification
-- Supply chain and manufacturing considerations
-- Emerging threats and opportunities
+1. **Market Landscape Overview**: Current development trends, pipeline maturity, and key patterns
+2. **Development Phases & Timeline**: Phase distribution analysis with realistic development timelines
+3. **Key Players & Sponsor Activity**: Major sponsors, their focus areas, and competitive positioning  
+4. **Technology & Mechanism Analysis**: Group interventions by mechanism of action or therapeutic approach
+5. **Development Patterns**: Common trial designs, target populations, and regulatory approaches
+6. **Pipeline Gaps & Opportunities**: Underserved areas, emerging approaches, and development opportunities
 
 Clinical Trial Data:
 {trial_text}
 
-Provide actionable strategic intelligence for policy makers, focusing on capabilities, timelines, and strategic implications rather than commercial opportunities.
+Provide actionable insights for clinical development, focusing on pipeline intelligence, development timelines, and therapeutic opportunities.
 """
     
     def _generate_demo_analysis(self, topic: str, trials: List[Trial]) -> str:

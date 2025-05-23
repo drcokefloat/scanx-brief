@@ -254,7 +254,7 @@ class ClinicalTrialsAPI:
     def get_search_transparency_report(self, query: str, max_samples: int = 10) -> Dict[str, Any]:
         """
         Generate a transparency report showing exactly how the search works.
-        This satisfies information specialists' need to understand search mechanics.
+        Provides detailed search analysis and field breakdown for understanding search mechanics.
         
         Args:
             query: Search query to analyze
@@ -376,10 +376,10 @@ ClinicalTrials.gov's query.term parameter performs a comprehensive full-text sea
 • Returns studies where ANY search term matches in ANY field
 • Uses ClinicalTrials.gov's internal relevance ranking
 
-**Important Notes for Information Specialists:**
+**Search Notes:**
 • This is a broad "any field" search, not targeted field searching
 • May return studies where search terms appear in secondary contexts
-• For systematic reviews, consider using Advanced Search with specific field targeting
+• For precision searching, consider using Advanced Search with specific field targeting
 • Results ordering is based on ClinicalTrials.gov's relevance algorithm, not chronological
         """.strip()
 
@@ -684,6 +684,7 @@ def generate_brief(search_term: str, owner=None, display_topic: str = None) -> B
         
         # Step 4: Mark as completed
         brief.status = Brief.STATUS_COMPLETED
+        brief.last_updated = timezone.now()
         brief.save()
         
         logger.info(f"Brief generation completed successfully: {brief.id}")
@@ -693,6 +694,79 @@ def generate_brief(search_term: str, owner=None, display_topic: str = None) -> B
         logger.error(f"Brief generation failed: {str(e)}")
         brief.status = Brief.STATUS_FAILED
         brief.gpt_summary = f"Brief generation failed: {str(e)}"
+        brief.save()
+        raise
+
+
+def refresh_brief(brief: Brief) -> Brief:
+    """
+    Refresh an existing brief with updated clinical trial data and AI analysis.
+    
+    Args:
+        brief: The Brief object to refresh
+        
+    Returns:
+        Updated Brief object
+        
+    Raises:
+        Exception: If refresh fails
+    """
+    if not brief.can_be_refreshed():
+        raise ValueError(f"Brief cannot be refreshed (status: {brief.status})")
+    
+    logger.info(f"Starting brief refresh for: {brief.topic} (ID: {brief.id})")
+    
+    # Mark as generating
+    original_status = brief.status
+    brief.status = Brief.STATUS_GENERATING
+    brief.save()
+    
+    try:
+        # Clear existing trials
+        brief.trials.all().delete()
+        
+        # Use the same search logic as original generation
+        # If we have search metadata, use the original query
+        search_term = brief.search_metadata.get('query', brief.topic) if brief.search_metadata else brief.topic
+        
+        # Step 1: Fetch fresh clinical trials
+        api_client = ClinicalTrialsAPI()
+        studies = api_client.search_studies(search_term)
+        
+        logger.info(f"Fetched {len(studies)} fresh studies from ClinicalTrials.gov")
+        
+        # Step 1.5: Generate fresh search transparency report
+        search_report = api_client.get_search_transparency_report(search_term, max_samples=15)
+        brief.search_metadata = search_report
+        
+        # Step 2: Create fresh trial records
+        trials_created = 0
+        for study in studies:
+            trial = create_trial_from_study(study, brief)
+            if trial:
+                trials_created += 1
+        
+        logger.info(f"Created {trials_created} fresh trial records")
+        
+        # Step 3: Generate fresh AI analysis
+        trials = list(brief.trials.all())
+        if trials:
+            analyzer = AIAnalyzer()
+            brief.gpt_summary = analyzer.analyze_trials(brief.topic, trials)
+        else:
+            brief.gpt_summary = f"No clinical trials found for '{brief.topic}'. This may indicate a very specialized or emerging therapeutic area."
+        
+        # Step 4: Mark as completed with fresh timestamp
+        brief.status = Brief.STATUS_COMPLETED
+        brief.last_updated = timezone.now()
+        brief.save()
+        
+        logger.info(f"Brief refresh completed successfully: {brief.id}")
+        return brief
+        
+    except Exception as e:
+        logger.error(f"Brief refresh failed: {str(e)}")
+        brief.status = original_status  # Restore original status
         brief.save()
         raise
 

@@ -81,12 +81,19 @@ class Brief(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True,
         null=True,
-        help_text="When the brief was created"
+        blank=True,
+        help_text="When this brief was first created"
     )
     updated_at = models.DateTimeField(
         auto_now=True,
         null=True,
-        help_text="When the brief was last updated"
+        blank=True,
+        help_text="When this brief was last modified"
+    )
+    last_updated = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this brief was last refreshed with new data"
     )
     expires_at = models.DateTimeField(
         help_text="When the brief expires"
@@ -132,8 +139,8 @@ class Brief(models.Model):
         return f"{self.topic} ({self.get_status_display()})"
     
     def get_absolute_url(self) -> str:
-        """Return the URL for this brief's dashboard."""
-        return reverse('brief_dashboard', kwargs={'brief_id': self.id})
+        """Return URL to view this brief."""
+        return reverse('brief_detail', kwargs={'brief_id': self.id})
     
     def save(self, *args, **kwargs):
         """Override save to set expiration date if not set."""
@@ -176,6 +183,24 @@ class Brief(models.Model):
             .values_list('sponsor', flat=True)
             .distinct()
         )
+    
+    def days_since_last_update(self) -> Optional[int]:
+        """Return number of days since last update, or None if never updated."""
+        if not self.last_updated:
+            return None
+        delta = timezone.now() - self.last_updated
+        return delta.days
+    
+    def is_stale(self, days_threshold: int = 7) -> bool:
+        """Check if brief is older than threshold and might need updating."""
+        days = self.days_since_last_update()
+        if days is None:
+            return True  # Never updated
+        return days >= days_threshold
+    
+    def can_be_refreshed(self) -> bool:
+        """Check if brief can be refreshed (completed and not currently generating)."""
+        return self.status == self.STATUS_COMPLETED
 
 
 class TrialQuerySet(models.QuerySet):

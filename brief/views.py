@@ -17,7 +17,7 @@ from django.views.generic import DetailView, ListView
 
 from .forms import BriefCreateForm, BriefFilterForm, CustomUserCreationForm
 from .models import Brief, Trial
-from .utils import generate_brief
+from .utils import generate_brief, refresh_brief
 
 logger = logging.getLogger(__name__)
 
@@ -251,30 +251,35 @@ def brief_status(request: HttpRequest, brief_id: str) -> JsonResponse:
         return JsonResponse({'error': 'Internal server error'}, status=500)
 
 
+@require_http_methods(["POST"])
 @login_required
 def delete_brief(request: HttpRequest, brief_id: str) -> HttpResponse:
-    """
-    Delete a brief (POST only for security).
-    """
-    if request.method != 'POST':
-        return redirect('brief_list')
+    """Delete a brief."""
+    brief = get_object_or_404(Brief, id=brief_id, owner=request.user)
+    brief.delete()
+    messages.success(request, f'Brief "{brief.topic}" deleted successfully.')
+    return redirect('brief_list')
+
+
+@require_http_methods(["POST"])
+@login_required
+def refresh_brief_view(request: HttpRequest, brief_id: str) -> HttpResponse:
+    """Refresh a brief with updated data."""
+    brief = get_object_or_404(Brief, id=brief_id, owner=request.user)
+    
+    if not brief.can_be_refreshed():
+        messages.error(request, f'Brief cannot be refreshed (status: {brief.get_status_display()})')
+        return redirect('brief_dashboard', brief_id=brief.id)
     
     try:
-        brief = get_object_or_404(Brief, id=brief_id, owner=request.user)
-        topic = brief.topic
-        
-        brief.delete()
-        logger.info(f"Brief deleted: {brief_id} ({topic}) by {request.user.username}")
-        
-        messages.success(request, f"Brief for '{topic}' has been deleted.")
-        
-    except Brief.DoesNotExist:
-        messages.error(request, "Brief not found.")
+        # Refresh the brief with new data
+        refresh_brief(brief)
+        messages.success(request, f'Brief "{brief.topic}" refreshed successfully with latest data.')
     except Exception as e:
-        logger.error(f"Error deleting brief {brief_id}: {str(e)}")
-        messages.error(request, "An error occurred while deleting the brief.")
+        logger.error(f"Failed to refresh brief {brief_id}: {str(e)}")
+        messages.error(request, f'Failed to refresh brief: {str(e)}')
     
-    return redirect('brief_list')
+    return redirect('brief_dashboard', brief_id=brief.id)
 
 
 def landing_page(request: HttpRequest) -> HttpResponse:

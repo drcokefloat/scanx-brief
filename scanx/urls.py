@@ -24,6 +24,7 @@ brief_patterns = [
     path("<uuid:brief_id>/", brief_views.brief_dashboard, name="brief_dashboard"),
     path("<uuid:brief_id>/status/", brief_views.brief_status, name="brief_status"),
     path("<uuid:brief_id>/delete/", brief_views.delete_brief, name="delete_brief"),
+    path("<uuid:brief_id>/refresh/", brief_views.refresh_brief_view, name="refresh_brief"),
 ]
 
 # Main URL patterns

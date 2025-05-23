@@ -1,6 +1,28 @@
 {% extends "base.html" %}
 {% block title %}My Briefs{% endblock %}
 {% block content %}
+<!-- Loading overlay (initially hidden) -->
+<div id="refreshLoadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
+     style="display: none !important; background: rgba(255,255,255,0.95); z-index: 9999;">
+    <div class="text-center">
+        <div class="spinner-border text-danger mb-3" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4 class="text-danger mb-2">Refreshing Brief...</h4>
+        <p class="text-muted mb-3">
+            Fetching latest clinical trial data for <strong id="refreshingTopic"></strong>.<br>
+            This may take a few minutes.
+        </p>
+        <div class="progress mx-auto" style="width: 300px; height: 8px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger" 
+                 role="progressbar" style="width: 100%"></div>
+        </div>
+        <small class="text-muted mt-2 d-block">
+            <span id="refreshStep">Searching ClinicalTrials.gov...</span>
+        </small>
+    </div>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="h3 mb-0">Your Briefs</h2>
     <a href="{% url 'create_brief' %}" class="btn btn-danger">
@@ -14,11 +36,34 @@
             <div class="card h-100 shadow-sm">
                 <div class="card-body d-flex flex-column">
                     <h5 class="card-title text-danger">{{ brief.topic }}</h5>
-                    <p class="card-text text-muted small">Created: {{ brief.created_at|date:"M d, Y H:i" }}</p>
+                    <div class="text-muted small mb-2">
+                        <div>Created: {{ brief.created_at|date:"M d, Y" }}</div>
+                        {% if brief.last_updated %}
+                            <div>
+                                Updated: {{ brief.last_updated|date:"M d, Y" }}
+                                {% with days=brief.days_since_last_update %}
+                                    {% if days %}
+                                        ({{ days }} day{{ days|pluralize }} ago)
+                                        {% if brief.is_stale %}
+                                            <span class="badge bg-warning text-dark ms-1">May need refresh</span>
+                                        {% endif %}
+                                    {% endif %}
+                                {% endwith %}
+                            </div>
+                        {% endif %}
+                    </div>
                     <div class="mt-auto d-flex justify-content-between align-items-center">
                         <a href="{% url 'brief_dashboard' brief.id %}" class="btn btn-outline-danger">View Dashboard</a>
-                        <button onclick="deleteBrief('{{ brief.id }}', '{{ brief.topic|escapejs }}')" 
-                                class="btn btn-sm btn-outline-secondary" title="Delete">🗑️</button>
+                        <div class="d-flex gap-1">
+                            {% if brief.can_be_refreshed %}
+                                <button onclick="refreshBrief('{{ brief.id }}', '{{ brief.topic|escapejs }}')" 
+                                        class="btn btn-sm btn-outline-primary" title="Refresh">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            {% endif %}
+                            <button onclick="deleteBrief('{{ brief.id }}', '{{ brief.topic|escapejs }}')" 
+                                    class="btn btn-sm btn-outline-secondary" title="Delete">🗑️</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -39,12 +84,47 @@
     <form id="deleteForm-{{ brief.id }}" method="post" action="{% url 'delete_brief' brief.id %}" style="display: none;">
         {% csrf_token %}
     </form>
+    <form id="refreshForm-{{ brief.id }}" method="post" action="{% url 'refresh_brief' brief.id %}" style="display: none;">
+        {% csrf_token %}
+    </form>
 {% endfor %}
 
 <script>
 function deleteBrief(briefId, briefTopic) {
     if (confirm(`Are you sure you want to delete the brief for "${briefTopic}"? This action cannot be undone.`)) {
         document.getElementById(`deleteForm-${briefId}`).submit();
+    }
+}
+
+function refreshBrief(briefId, briefTopic) {
+    if (confirm(`Refresh "${briefTopic}" with the latest clinical trial data? This will call the AI analysis again and may take a few minutes.`)) {
+        // Update topic in loading overlay
+        document.getElementById('refreshingTopic').textContent = briefTopic;
+        
+        // Show loading overlay
+        document.getElementById('refreshLoadingOverlay').style.display = 'flex';
+        
+        // Cycle through progress messages
+        const steps = [
+            'Searching ClinicalTrials.gov...',
+            'Analyzing trial data...',
+            'Generating AI insights...',
+            'Updating brief...'
+        ];
+        let currentStep = 0;
+        const stepElement = document.getElementById('refreshStep');
+        
+        // Update step message every 3 seconds
+        const stepInterval = setInterval(() => {
+            currentStep = (currentStep + 1) % steps.length;
+            stepElement.textContent = steps[currentStep];
+        }, 3000);
+        
+        // Store interval ID to clear it if needed
+        window.refreshInterval = stepInterval;
+        
+        // Submit the form
+        document.getElementById(`refreshForm-${briefId}`).submit();
     }
 }
 </script>

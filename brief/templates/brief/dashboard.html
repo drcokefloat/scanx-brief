@@ -5,6 +5,28 @@
 {% block title %}{{ brief.topic }} - Clinical Brief{% endblock %}
 
 {% block content %}
+    <!-- Loading overlay (initially hidden) -->
+    <div id="refreshLoadingOverlay" class="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" 
+         style="display: none !important; background: rgba(255,255,255,0.95); z-index: 9999;">
+        <div class="text-center">
+            <div class="spinner-border text-danger mb-3" role="status" style="width: 3rem; height: 3rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4 class="text-danger mb-2">Refreshing Brief...</h4>
+            <p class="text-muted mb-3">
+                Fetching latest clinical trial data for <strong>{{ brief.topic }}</strong>.<br>
+                This may take a few minutes.
+            </p>
+            <div class="progress mx-auto" style="width: 300px; height: 8px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger" 
+                     role="progressbar" style="width: 100%"></div>
+            </div>
+            <small class="text-muted mt-2 d-block">
+                <span id="refreshStep">Searching ClinicalTrials.gov...</span>
+            </small>
+        </div>
+    </div>
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
@@ -12,13 +34,39 @@
                 <li class="breadcrumb-item active">{{ brief.topic }}</li>
             </ol>
         </nav>
-        <button onclick="confirmDelete()" class="btn btn-outline-danger btn-sm">Delete Brief</button>
+        <div class="d-flex gap-2">
+            {% if brief.can_be_refreshed %}
+                <button onclick="confirmRefresh()" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-arrow-clockwise me-1"></i>Refresh Data
+                </button>
+            {% endif %}
+            <button onclick="confirmDelete()" class="btn btn-outline-danger btn-sm">Delete Brief</button>
+        </div>
     </div>
 
     <div class="bg-danger text-white py-4 rounded mb-4">
         <div class="container">
             <h1 class="display-6 fw-bold">{{ brief.topic }}</h1>
-            <p class="lead mb-0">Clinical Trial Landscape Analysis</p>
+            <div class="d-flex justify-content-between align-items-end">
+                <p class="lead mb-0">Clinical Trial Landscape Analysis</p>
+                <div class="text-end">
+                    {% if brief.last_updated %}
+                        <small class="opacity-75">
+                            Last updated: {{ brief.last_updated|date:"M d, Y" }}
+                            {% with days=brief.days_since_last_update %}
+                                {% if days %}
+                                    ({{ days }} day{{ days|pluralize }} ago)
+                                    {% if brief.is_stale %}
+                                        <span class="badge bg-warning text-dark ms-1">May need refresh</span>
+                                    {% endif %}
+                                {% endif %}
+                            {% endwith %}
+                        </small>
+                    {% else %}
+                        <small class="opacity-75">Created: {{ brief.created_at|date:"M d, Y" }}</small>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 
@@ -50,109 +98,70 @@
         </div>
     </div>
 
-    <!-- Search Methodology Section -->
+    <!-- Search Transparency Collapsible Section -->
     {% if brief.search_metadata %}
-    <div class="card mb-4">
-        <div class="card-header">
-            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" 
-                    data-bs-toggle="collapse" data-bs-target="#searchMethodology" 
-                    aria-expanded="false" aria-controls="searchMethodology">
-                <h2 class="h5 mb-0 d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-search me-2"></i>Search Methodology & Transparency</span>
-                    <span>▼</span>
-                </h2>
-            </button>
-        </div>
-        <div class="collapse" id="searchMethodology">
-            <div class="card-body">
-                <!-- Search Query -->
-                <div class="mb-4">
-                    <h6 class="text-danger fw-bold">Search Query Executed</h6>
-                    <code class="bg-light p-2 rounded d-block">{{ brief.search_metadata.query }}</code>
-                    <small class="text-muted">Exact query sent to ClinicalTrials.gov API</small>
-                </div>
+    <div class="card border-0 shadow-sm mt-4">
+        <div class="card-body">
+            <a class="btn btn-outline-secondary btn-sm mb-3" data-bs-toggle="collapse" href="#searchTransparency" role="button" aria-expanded="false" aria-controls="searchTransparency">
+                <i class="bi bi-info-circle me-2"></i>Search Methodology
+            </a>
+            
+            <div class="collapse" id="searchTransparency">
+                <div class="border-top pt-3">
+                    
+                    <!-- Search Explanation -->
+                    <div class="mb-4">
+                        <h6 class="text-primary fw-bold">How Search Works</h6>
+                        <div class="alert alert-light border small">
+                            {{ brief.search_metadata.search_explanation|markdown }}
+                        </div>
+                    </div>
 
-                <!-- Results Overview -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <h6 class="text-danger fw-bold">Results Overview</h6>
-                        <ul class="list-unstyled">
-                            <li><strong>Total Results:</strong> {{ brief.search_metadata.total_results|default:"0" }} studies</li>
-                            <li><strong>Included in Analysis:</strong> {{ trial_stats.total }} studies</li>
+                    <!-- Search Details -->
+                    <div class="alert alert-light border">
+                        <h6 class="fw-bold mb-2">Search Details</h6>
+                        <p class="small mb-2">This search uses ClinicalTrials.gov's full-text search across multiple fields including titles, conditions, interventions, and summaries.</p>
+                        <ul class="small mb-0">
+                            <li><strong>Search Method:</strong> Free-text search across clinical trial database</li>
+                            <li><strong>Query Executed:</strong> {{ brief.search_metadata.query }}</li>
                             <li><strong>Search Date:</strong> {{ brief.created_at|date:"M d, Y" }}</li>
+                            <li><strong>Results Retrieved:</strong> {{ brief.search_metadata.total_results }} studies total</li>
                         </ul>
                     </div>
-                    <div class="col-md-6">
-                        <h6 class="text-danger fw-bold">Field Match Analysis</h6>
-                        {% if brief.search_metadata.field_analysis %}
-                        <div class="small">
-                            <div class="d-flex justify-content-between">
-                                <span>Study Titles:</span>
-                                <span><strong>{{ brief.search_metadata.field_analysis.title_matches.percentage }}%</strong></span>
+                    
+                    {% if brief.search_metadata.field_analysis %}
+                    <!-- Where Search Terms Were Found -->
+                    <div class="alert alert-light border">
+                        <h6 class="fw-bold mb-3">Where Search Terms Were Found</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-medium">Study Titles</span>
+                                    <span class="badge bg-primary">{{ brief.search_metadata.field_analysis.title_matches.percentage }}%</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-medium">Medical Conditions</span>
+                                    <span class="badge bg-success">{{ brief.search_metadata.field_analysis.condition_matches.percentage }}%</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-medium">Interventions</span>
+                                    <span class="badge bg-info">{{ brief.search_metadata.field_analysis.intervention_matches.percentage }}%</span>
+                                </div>
                             </div>
-                            <div class="d-flex justify-content-between">
-                                <span>Medical Conditions:</span>
-                                <span><strong>{{ brief.search_metadata.field_analysis.condition_matches.percentage }}%</strong></span>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span>Interventions/Drugs:</span>
-                                <span><strong>{{ brief.search_metadata.field_analysis.intervention_matches.percentage }}%</strong></span>
-                            </div>
-                            <div class="d-flex justify-content-between">
-                                <span>Study Summaries:</span>
-                                <span><strong>{{ brief.search_metadata.field_analysis.summary_matches.percentage }}%</strong></span>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-medium">Study Summaries</span>
+                                    <span class="badge bg-warning text-dark">{{ brief.search_metadata.field_analysis.summary_matches.percentage }}%</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="small fw-medium">Other Fields</span>
+                                    <span class="badge bg-secondary">{{ brief.search_metadata.field_analysis.other_matches.percentage }}%</span>
+                                </div>
                             </div>
                         </div>
-                        {% endif %}
+                        <p class="small text-muted mt-2 mb-0">Analysis based on {{ brief.search_metadata.field_analysis.total_analyzed }} sample studies</p>
                     </div>
-                </div>
-
-                <!-- Sample Results Analysis -->
-                {% if brief.search_metadata.sample_matches %}
-                <div class="mb-4">
-                    <h6 class="text-danger fw-bold">Sample Results Analysis</h6>
-                    <p class="small text-muted">Analysis of how search terms matched in the first {{ brief.search_metadata.field_analysis.total_analyzed }} results:</p>
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>NCT ID</th>
-                                    <th>Study Title</th>
-                                    <th>Matched Fields</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for match in brief.search_metadata.sample_matches|slice:":8" %}
-                                <tr>
-                                    <td><small>{{ match.nct_id }}</small></td>
-                                    <td><small>{{ match.title }}</small></td>
-                                    <td><small>{{ match.matched_fields|join:", " }}</small></td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                {% endif %}
-
-                <!-- Search Explanation -->
-                <div class="mb-4">
-                    <h6 class="text-danger fw-bold">How ClinicalTrials.gov Search Works</h6>
-                    <div class="alert alert-light border small">
-                        {{ brief.search_metadata.search_explanation|linebreaksbr }}
-                    </div>
-                </div>
-
-                <!-- For Information Specialists -->
-                <div class="alert alert-info border">
-                    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>For Information Specialists & Systematic Reviewers</h6>
-                    <p class="small mb-2">This search uses ClinicalTrials.gov's general "query.term" parameter, which performs broad full-text searching across multiple fields. Key considerations:</p>
-                    <ul class="small mb-0">
-                        <li><strong>Search Strategy:</strong> Free-text search across title, conditions, interventions, and summary fields</li>
-                        <li><strong>Limitations:</strong> No control over field-specific searching or boolean logic within ClinicalTrials.gov</li>
-                        <li><strong>Reproducibility:</strong> Query and timestamp documented above for methodology sections</li>
-                        <li><strong>Completeness:</strong> Results limited to {{ brief.search_metadata.total_results }} studies as per API pagination</li>
-                    </ul>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -275,6 +284,11 @@
     <form id="deleteForm" method="post" action="{% url 'delete_brief' brief.id %}" style="display: none;">
         {% csrf_token %}
     </form>
+    
+    <!-- Hidden refresh form -->
+    <form id="refreshForm" method="post" action="{% url 'refresh_brief' brief.id %}" style="display: none;">
+        {% csrf_token %}
+    </form>
 {% endblock %}
 
 
@@ -294,6 +308,42 @@
         function confirmDelete() {
             if (confirm('Are you sure you want to delete this brief? This action cannot be undone.')) {
                 document.getElementById('deleteForm').submit();
+            }
+        }
+
+        function confirmRefresh() {
+            if (confirm('Refresh this brief with the latest clinical trial data? This will call the AI analysis again and may take a few minutes.')) {
+                // Disable the refresh button
+                const refreshBtn = document.querySelector('button[onclick="confirmRefresh()"]');
+                if (refreshBtn) {
+                    refreshBtn.disabled = true;
+                    refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Refreshing...';
+                }
+                
+                // Show loading overlay
+                document.getElementById('refreshLoadingOverlay').style.display = 'flex';
+                
+                // Cycle through progress messages
+                const steps = [
+                    'Searching ClinicalTrials.gov...',
+                    'Analyzing trial data...',
+                    'Generating AI insights...',
+                    'Updating brief...'
+                ];
+                let currentStep = 0;
+                const stepElement = document.getElementById('refreshStep');
+                
+                // Update step message every 3 seconds
+                const stepInterval = setInterval(() => {
+                    currentStep = (currentStep + 1) % steps.length;
+                    stepElement.textContent = steps[currentStep];
+                }, 3000);
+                
+                // Store interval ID to clear it if needed
+                window.refreshInterval = stepInterval;
+                
+                // Submit the form
+                document.getElementById('refreshForm').submit();
             }
         }
 
@@ -318,6 +368,7 @@
 
         // Make confirmDelete available globally
         window.confirmDelete = confirmDelete;
+        window.confirmRefresh = confirmRefresh;
     });
 </script>
 {% endblock %}

@@ -22,9 +22,9 @@ def markdown(value):
     html = str(value)
     
     # Headers (## Header -> <h3>Header</h3>)
-    html = re.sub(r'^### (.+)$', r'<h4>\1</h4>', html, flags=re.MULTILINE)
-    html = re.sub(r'^## (.+)$', r'<h3>\1</h3>', html, flags=re.MULTILINE)
-    html = re.sub(r'^# (.+)$', r'<h2>\1</h2>', html, flags=re.MULTILINE)
+    html = re.sub(r'^### (.+)$', r'<h4 class="mt-4 mb-2">\1</h4>', html, flags=re.MULTILINE)
+    html = re.sub(r'^## (.+)$', r'<h3 class="mt-4 mb-2">\1</h3>', html, flags=re.MULTILINE)
+    html = re.sub(r'^# (.+)$', r'<h2 class="mt-4 mb-2">\1</h2>', html, flags=re.MULTILINE)
     
     # Bold text (**text** -> <strong>text</strong>)
     html = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', html)
@@ -32,32 +32,74 @@ def markdown(value):
     # Italic text (*text* -> <em>text</em>)
     html = re.sub(r'\*(.+?)\*', r'<em>\1</em>', html)
     
-    # Line breaks
-    html = html.replace('\n', '<br>')
+    # Split into paragraphs and handle line breaks more intelligently
+    paragraphs = html.split('\n\n')
+    processed_paragraphs = []
     
-    # Bullet points (- item -> <ul><li>item</li></ul>)
-    lines = html.split('<br>')
-    in_list = False
+    for paragraph in paragraphs:
+        paragraph = paragraph.strip()
+        if paragraph:
+            # If it's a header, don't wrap in paragraph tags
+            if paragraph.startswith('<h'):
+                processed_paragraphs.append(paragraph)
+            else:
+                # Convert single line breaks to <br> within paragraphs
+                paragraph = paragraph.replace('\n', '<br>')
+                # Wrap in paragraph tags with margin
+                processed_paragraphs.append(f'<p class="mb-3">{paragraph}</p>')
+    
+    html = '\n'.join(processed_paragraphs)
+    
+    # Handle numbered lists (1. item -> <ol><li>item</li></ol>)
+    lines = html.split('\n')
+    in_numbered_list = False
+    in_bullet_list = False
     result_lines = []
     
     for line in lines:
         line = line.strip()
-        if line.startswith('- '):
-            if not in_list:
+        
+        # Handle numbered lists
+        if re.match(r'^\d+\.\s', line):
+            if not in_numbered_list:
+                if in_bullet_list:
+                    result_lines.append('</ul>')
+                    in_bullet_list = False
+                result_lines.append('<ol>')
+                in_numbered_list = True
+            # Extract the text after the number
+            text = re.sub(r'^\d+\.\s*', '', line)
+            result_lines.append(f'<li>{text}</li>')
+        
+        # Handle bullet points
+        elif line.startswith('- '):
+            if not in_bullet_list:
+                if in_numbered_list:
+                    result_lines.append('</ol>')
+                    in_numbered_list = False
                 result_lines.append('<ul>')
-                in_list = True
+                in_bullet_list = True
             result_lines.append(f'<li>{line[2:]}</li>')
+        
         else:
-            if in_list:
+            # Close any open lists
+            if in_numbered_list:
+                result_lines.append('</ol>')
+                in_numbered_list = False
+            if in_bullet_list:
                 result_lines.append('</ul>')
-                in_list = False
+                in_bullet_list = False
+            
             if line:
                 result_lines.append(line)
     
-    if in_list:
+    # Close any remaining open lists
+    if in_numbered_list:
+        result_lines.append('</ol>')
+    if in_bullet_list:
         result_lines.append('</ul>')
     
-    html = '<br>'.join(result_lines)
+    html = '\n'.join(result_lines)
     
     return mark_safe(html)
 

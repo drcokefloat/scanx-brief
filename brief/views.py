@@ -78,48 +78,8 @@ def parse_gpt_summary(summary: str) -> list:
     """
     Parse the GPT summary into structured sections for Bootstrap display.
     """
-    if not summary:
-        return []
-    
-    sections = []
-    lines = summary.split('\n')
-    current_section = None
-    current_content = []
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-        # Check if this is a heading (numbered sections like "1. Title" or just "Title")
-        if (line and 
-            (line[0].isdigit() and '. ' in line[:10]) or  # "1. Market Overview"
-            (len(line) < 100 and line.endswith(':') == False and  # Not too long, not ending with ':'
-             any(keyword in line.lower() for keyword in ['overview', 'activity', 'patterns', 'signals', 'intelligence', 'considerations', 'conclusion']))):
-            
-            # Save previous section if exists
-            if current_section and current_content:
-                sections.append({
-                    'title': current_section,
-                    'content': ' '.join(current_content).strip()
-                })
-            
-            # Start new section
-            current_section = line.replace(': ', '').replace(':', '').strip()
-            current_content = []
-        else:
-            # Add to current content
-            if line and current_section:
-                current_content.append(line)
-    
-    # Add the last section
-    if current_section and current_content:
-        sections.append({
-            'title': current_section,
-            'content': ' '.join(current_content).strip()
-        })
-    
-    return sections
+    # Temporarily return empty list to force fallback to raw display
+    return []
 
 
 @login_required

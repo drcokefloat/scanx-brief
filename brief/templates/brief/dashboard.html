@@ -43,8 +43,8 @@
                         </div>
                     {% endfor %}
                 {% else %}
-                    <!-- Fallback for plain text -->
-                    <div class="lh-lg">{{ brief.gpt_summary|linebreaksbr }}</div>
+                    <!-- Fallback for plain text with markdown rendering -->
+                    <div class="lh-lg">{{ brief.gpt_summary|markdown }}</div>
                 {% endif %}
             </div>
         </div>

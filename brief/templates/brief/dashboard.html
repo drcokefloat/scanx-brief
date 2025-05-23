@@ -50,6 +50,115 @@
         </div>
     </div>
 
+    <!-- Search Methodology Section -->
+    {% if brief.search_metadata %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <button class="btn btn-link text-decoration-none p-0 w-100 text-start" type="button" 
+                    data-bs-toggle="collapse" data-bs-target="#searchMethodology" 
+                    aria-expanded="false" aria-controls="searchMethodology">
+                <h2 class="h5 mb-0 d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-search me-2"></i>Search Methodology & Transparency</span>
+                    <span>▼</span>
+                </h2>
+            </button>
+        </div>
+        <div class="collapse" id="searchMethodology">
+            <div class="card-body">
+                <!-- Search Query -->
+                <div class="mb-4">
+                    <h6 class="text-danger fw-bold">Search Query Executed</h6>
+                    <code class="bg-light p-2 rounded d-block">{{ brief.search_metadata.query }}</code>
+                    <small class="text-muted">Exact query sent to ClinicalTrials.gov API</small>
+                </div>
+
+                <!-- Results Overview -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="text-danger fw-bold">Results Overview</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Total Results:</strong> {{ brief.search_metadata.total_results|default:"0" }} studies</li>
+                            <li><strong>Included in Analysis:</strong> {{ trial_stats.total }} studies</li>
+                            <li><strong>Search Date:</strong> {{ brief.created_at|date:"M d, Y" }}</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-danger fw-bold">Field Match Analysis</h6>
+                        {% if brief.search_metadata.field_analysis %}
+                        <div class="small">
+                            <div class="d-flex justify-content-between">
+                                <span>Study Titles:</span>
+                                <span><strong>{{ brief.search_metadata.field_analysis.title_matches.percentage }}%</strong></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Medical Conditions:</span>
+                                <span><strong>{{ brief.search_metadata.field_analysis.condition_matches.percentage }}%</strong></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Interventions/Drugs:</span>
+                                <span><strong>{{ brief.search_metadata.field_analysis.intervention_matches.percentage }}%</strong></span>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <span>Study Summaries:</span>
+                                <span><strong>{{ brief.search_metadata.field_analysis.summary_matches.percentage }}%</strong></span>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Sample Results Analysis -->
+                {% if brief.search_metadata.sample_matches %}
+                <div class="mb-4">
+                    <h6 class="text-danger fw-bold">Sample Results Analysis</h6>
+                    <p class="small text-muted">Analysis of how search terms matched in the first {{ brief.search_metadata.field_analysis.total_analyzed }} results:</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>NCT ID</th>
+                                    <th>Study Title</th>
+                                    <th>Matched Fields</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for match in brief.search_metadata.sample_matches|slice:":8" %}
+                                <tr>
+                                    <td><small>{{ match.nct_id }}</small></td>
+                                    <td><small>{{ match.title }}</small></td>
+                                    <td><small>{{ match.matched_fields|join:", " }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Search Explanation -->
+                <div class="mb-4">
+                    <h6 class="text-danger fw-bold">How ClinicalTrials.gov Search Works</h6>
+                    <div class="alert alert-light border small">
+                        {{ brief.search_metadata.search_explanation|linebreaksbr }}
+                    </div>
+                </div>
+
+                <!-- For Information Specialists -->
+                <div class="alert alert-info border">
+                    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>For Information Specialists & Systematic Reviewers</h6>
+                    <p class="small mb-2">This search uses ClinicalTrials.gov's general "query.term" parameter, which performs broad full-text searching across multiple fields. Key considerations:</p>
+                    <ul class="small mb-0">
+                        <li><strong>Search Strategy:</strong> Free-text search across title, conditions, interventions, and summary fields</li>
+                        <li><strong>Limitations:</strong> No control over field-specific searching or boolean logic within ClinicalTrials.gov</li>
+                        <li><strong>Reproducibility:</strong> Query and timestamp documented above for methodology sections</li>
+                        <li><strong>Completeness:</strong> Results limited to {{ brief.search_metadata.total_results }} studies as per API pagination</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card mb-4">
         <div class="card-header">
             <h2 class="h5 mb-0">Key Metrics</h2>

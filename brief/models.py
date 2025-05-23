@@ -98,6 +98,13 @@ class Brief(models.Model):
         help_text="AI-generated summary of the clinical trial landscape"
     )
     
+    # Search transparency data
+    search_metadata = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="Search methodology and transparency data for information specialists"
+    )
+    
     # Relationships
     owner = models.ForeignKey(
         User,

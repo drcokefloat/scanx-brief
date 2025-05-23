@@ -83,6 +83,10 @@ class ClinicalTrialsAPI:
                     logger.info("No more studies found, stopping pagination")
                     break
                 
+                # Log search analysis on first page
+                if page_count == 0:
+                    self._log_search_analysis(query, studies[:5])  # Analyze first 5 results
+                
                 all_studies.extend(studies)
                 logger.info(f"Fetched {len(studies)} studies (total: {len(all_studies)})")
                 
@@ -112,6 +116,108 @@ class ClinicalTrialsAPI:
         
         logger.info(f"Total studies fetched: {len(all_studies)}")
         return all_studies
+    
+    def _log_search_analysis(self, query: str, sample_studies: List[Dict[str, Any]]):
+        """
+        Analyze and log how the search query matched the returned studies.
+        This helps understand what fields ClinicalTrials.gov actually searches.
+        """
+        if not sample_studies:
+            return
+            
+        logger.info(f"=== SEARCH ANALYSIS for '{query}' ===")
+        
+        query_lower = query.lower()
+        query_words = query_lower.split()
+        
+        for i, study in enumerate(sample_studies):
+            protocol = study.get("protocolSection", {})
+            identification = protocol.get("identificationModule", {})
+            description = protocol.get("descriptionModule", {})
+            conditions = protocol.get("conditionsModule", {})
+            interventions = protocol.get("armsInterventionsModule", {})
+            
+            # Extract key fields
+            nct_id = identification.get("nctId", "")
+            title = identification.get("briefTitle", "")
+            summary = description.get("briefSummary", "")
+            condition_list = conditions.get("conditions", [])
+            intervention_list = interventions.get("interventions", [])
+            
+            # Check where query terms appear
+            matches = []
+            
+            # Check title
+            if any(word in title.lower() for word in query_words):
+                matches.append("TITLE")
+            
+            # Check conditions
+            condition_text = " ".join(condition_list).lower()
+            if any(word in condition_text for word in query_words):
+                matches.append("CONDITIONS")
+            
+            # Check interventions
+            intervention_names = []
+            for intervention in intervention_list:
+                intervention_names.append(intervention.get("name", ""))
+            intervention_text = " ".join(intervention_names).lower()
+            if any(word in intervention_text for word in query_words):
+                matches.append("INTERVENTIONS")
+            
+            # Check summary
+            if any(word in summary.lower() for word in query_words):
+                matches.append("SUMMARY")
+            
+            logger.info(f"Study {i+1} ({nct_id}): Matches in [{', '.join(matches)}]")
+            logger.info(f"  Title: {title[:100]}...")
+            if condition_list:
+                logger.info(f"  Conditions: {', '.join(condition_list[:3])}")
+            if intervention_names:
+                logger.info(f"  Interventions: {', '.join([name for name in intervention_names[:3] if name])}")
+        
+        logger.info("=== END SEARCH ANALYSIS ===")
+
+    def search_studies_advanced(self, condition: str = None, intervention: str = None, 
+                              operator: str = "AND", include_observational: bool = True) -> List[Dict[str, Any]]:
+        """
+        Advanced search with specific field targeting.
+        
+        Args:
+            condition: Medical condition to search for
+            intervention: Intervention/drug to search for  
+            operator: Boolean operator ("AND" or "OR")
+            include_observational: Whether to include observational studies
+            
+        Returns:
+            List of study dictionaries
+        """
+        # Build more specific query using ClinicalTrials.gov search syntax
+        query_parts = []
+        
+        if condition:
+            # Search in condition fields specifically
+            query_parts.append(f'AREA[ConditionSearch]{condition}')
+        
+        if intervention:
+            # Search in intervention fields specifically
+            query_parts.append(f'AREA[InterventionSearch]{intervention}')
+        
+        if len(query_parts) == 0:
+            raise ValueError("At least one of condition or intervention must be provided")
+        
+        # Combine with boolean operator
+        if len(query_parts) == 1:
+            search_query = query_parts[0]
+        else:
+            search_query = f" {operator} ".join(query_parts)
+        
+        # Add study type filter if needed
+        if not include_observational:
+            search_query = f"({search_query}) AND AREA[StudyType]Interventional"
+        
+        logger.info(f"Advanced search query: {search_query}")
+        
+        return self.search_studies(search_query)
     
     def _make_request(self, url: str, max_retries: int = 3) -> requests.Response:
         """
@@ -144,6 +250,138 @@ class ClinicalTrialsAPI:
                 if attempt == max_retries - 1:
                     raise ClinicalTrialsAPIError(f"Request failed: {str(e)}")
                 time.sleep(2 ** attempt)
+
+    def get_search_transparency_report(self, query: str, max_samples: int = 10) -> Dict[str, Any]:
+        """
+        Generate a transparency report showing exactly how the search works.
+        This satisfies information specialists' need to understand search mechanics.
+        
+        Args:
+            query: Search query to analyze
+            max_samples: Number of sample studies to analyze
+            
+        Returns:
+            Dictionary with search analysis and field breakdown
+        """
+        studies = self.search_studies(query)
+        sample_studies = studies[:max_samples]
+        
+        report = {
+            'query': query,
+            'total_results': len(studies),
+            'search_explanation': self._get_search_explanation(),
+            'field_analysis': {},
+            'sample_matches': []
+        }
+        
+        if not sample_studies:
+            return report
+        
+        # Analyze field matches across sample
+        field_counts = {
+            'title': 0,
+            'conditions': 0, 
+            'interventions': 0,
+            'summary': 0,
+            'other_fields': 0
+        }
+        
+        query_words = query.lower().split()
+        
+        for study in sample_studies:
+            protocol = study.get("protocolSection", {})
+            identification = protocol.get("identificationModule", {})
+            description = protocol.get("descriptionModule", {})
+            conditions = protocol.get("conditionsModule", {})
+            interventions = protocol.get("armsInterventionsModule", {})
+            
+            # Extract fields
+            nct_id = identification.get("nctId", "")
+            title = identification.get("briefTitle", "")
+            summary = description.get("briefSummary", "")
+            condition_list = conditions.get("conditions", [])
+            intervention_list = interventions.get("interventions", [])
+            
+            # Track matches
+            matches = {
+                'nct_id': nct_id,
+                'title': title[:150] + "..." if len(title) > 150 else title,
+                'matched_fields': []
+            }
+            
+            # Check each field
+            if any(word in title.lower() for word in query_words):
+                field_counts['title'] += 1
+                matches['matched_fields'].append('Study Title')
+            
+            condition_text = " ".join(condition_list).lower()
+            if any(word in condition_text for word in query_words):
+                field_counts['conditions'] += 1
+                matches['matched_fields'].append('Medical Conditions')
+            
+            intervention_names = [intervention.get("name", "") for intervention in intervention_list]
+            intervention_text = " ".join(intervention_names).lower()
+            if any(word in intervention_text for word in query_words):
+                field_counts['interventions'] += 1
+                matches['matched_fields'].append('Interventions/Drugs')
+            
+            if any(word in summary.lower() for word in query_words):
+                field_counts['summary'] += 1
+                matches['matched_fields'].append('Study Summary')
+            
+            # If no obvious matches found, it's probably in other fields
+            if not matches['matched_fields']:
+                field_counts['other_fields'] += 1
+                matches['matched_fields'].append('Other Fields (keywords, detailed descriptions, etc.)')
+            
+            report['sample_matches'].append(matches)
+        
+        # Calculate percentages
+        total_samples = len(sample_studies)
+        report['field_analysis'] = {
+            'total_analyzed': total_samples,
+            'title_matches': {'count': field_counts['title'], 'percentage': round(field_counts['title']/total_samples*100, 1)},
+            'condition_matches': {'count': field_counts['conditions'], 'percentage': round(field_counts['conditions']/total_samples*100, 1)},
+            'intervention_matches': {'count': field_counts['interventions'], 'percentage': round(field_counts['interventions']/total_samples*100, 1)},
+            'summary_matches': {'count': field_counts['summary'], 'percentage': round(field_counts['summary']/total_samples*100, 1)},
+            'other_matches': {'count': field_counts['other_fields'], 'percentage': round(field_counts['other_fields']/total_samples*100, 1)}
+        }
+        
+        return report
+    
+    def _get_search_explanation(self) -> str:
+        """
+        Explain how ClinicalTrials.gov search works based on empirical observation.
+        """
+        return """
+ClinicalTrials.gov's query.term parameter performs a comprehensive full-text search across multiple fields:
+
+**Primary Search Fields:**
+• Study Title (Brief Title)
+• Medical Conditions (official condition names and synonyms)
+• Interventions (drug names, therapies, devices)
+• Study Summary/Abstract (brief summary text)
+
+**Additional Search Areas (based on results analysis):**
+• Detailed study descriptions
+• Keywords and mesh terms
+• Sponsor information
+• Study design keywords
+• Inclusion/exclusion criteria text
+
+**Search Behavior:**
+• Case-insensitive matching
+• Partial word matching supported
+• Searches across synonyms and related terms
+• Returns studies where ANY search term matches in ANY field
+• Uses ClinicalTrials.gov's internal relevance ranking
+
+**Important Notes for Information Specialists:**
+• This is a broad "any field" search, not targeted field searching
+• May return studies where search terms appear in secondary contexts
+• For systematic reviews, consider using Advanced Search with specific field targeting
+• Results ordering is based on ClinicalTrials.gov's relevance algorithm, not chronological
+        """.strip()
 
 
 class AIAnalyzer:
@@ -402,6 +640,11 @@ def generate_brief(search_term: str, owner=None, display_topic: str = None) -> B
         studies = api_client.search_studies(search_term)
         
         logger.info(f"Fetched {len(studies)} studies from ClinicalTrials.gov")
+        
+        # Step 1.5: Generate search transparency report
+        search_report = api_client.get_search_transparency_report(search_term, max_samples=15)
+        brief.search_metadata = search_report
+        brief.save()
         
         # Step 2: Create trial records
         trials_created = 0

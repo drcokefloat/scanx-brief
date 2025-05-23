@@ -11,11 +11,20 @@ else
     return 1
 fi
 
-# Set environment variables
+# Load .env file if it exists
+if [ -f ".env" ]; then
+    set -a
+    source .env
+    set +a
+    echo "✅ Loaded environment variables from .env"
+else
+    echo "⚠️  No .env file found. Create one with your API keys."
+fi
+
+# Set default environment variables (non-sensitive)
 export DEBUG=True
 export SECRET_KEY="your-secret-key-here"
 export DATABASE_URL="sqlite:///db.sqlite3"
-export OPENAI_API_KEY="your-openai-api-key-here"
 export CLINICALTRIALS_API_URL="https://clinicaltrials.gov/api/v2"
 export ALLOWED_HOSTS="localhost,127.0.0.1"
 
